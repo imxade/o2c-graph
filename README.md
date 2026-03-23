@@ -1,8 +1,8 @@
 # O2C Graph Query System
 
 > ⚠️ **Disclaimer:** This project was vibe coded with Gemini 3.1 within hours.
->
 > 💡 **Prompts:** Check `Gemini3.1.md` for the prompts used during the vibe coding process.
+> 💳 **Live Demo Notice:** If the deployed chatbot is unresponsive or throwing errors, it is highly likely the free-tier Gemini API rate limits have been exhausted. Try again later or clone the repo and supply your own `GEMINI_API_KEY`.
 > 
 > A context-graph system over SAP Order-to-Cash (O2C) data. Unifies fragmented business entities (Sales Orders, Deliveries, Invoices, Payments, Customers, Products) into an interactive graph with a natural-language query interface.
 
@@ -42,18 +42,17 @@
 
 ```
 o2c-graph/
-├── sap-o2c-data/           # Source JSONL files (19 entity directories)
 ├── src/
+│   ├── sap-o2c-data/       # Source JSONL files (19 entity directories)
 │   ├── lib/
-│   │   ├── db.ts           # DuckDB singleton, init, dynamic stringification
+│   │   ├── client-db.ts    # DuckDB-WASM browser singleton and Vite blob loading
 │   │   └── llm.ts          # Gemini SDK client — SQL gen, NL answer, schema
 │   ├── routes/
 │   │   └── index.tsx       # Main UI (GraphCanvas + ChatPanel layout)
 │   ├── server/
-│   │   ├── graph.ts        # getGraphData TanStack server function
-│   │   └── query.ts        # executeQuery TanStack server function
+│   │   └── query.ts        # TanStack server RPCs for purely stateless LLM proxies
 │   └── components/
-│       ├── GraphCanvas.tsx # ForceGraph2D implementation
+│       ├── GraphCanvas.tsx # ForceGraph2D implementation and local DB queries
 │       └── ChatPanel.tsx   # Chat UI and LLM Debug Logs
 ├── vite.config.ts
 ├── package.json
@@ -81,7 +80,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Data
 
-The `sap-o2c-data/` directory must exist in the project root. On startup, all JSONL files are read via Node.js `fs` and registered into DuckDB WASM's virtual filesystem — no manual ETL required.
+The `src/sap-o2c-data/` directory contains all 19 contextual tables as JSONL files. On startup, Vite natively globs these files as static assets. The browser downloads them and instantly registers them into the client-side DuckDB WASM virtual filesystem — zero Node.js ETL required!
 
 ### Vercel Deployment
 
