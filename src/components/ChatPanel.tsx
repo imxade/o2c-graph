@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Database, Bot } from 'lucide-react';
-import { executeQuery } from '../server/query';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -40,19 +39,63 @@ export default function ChatPanel({ onHighlight }: ChatPanelProps) {
     setLoading(true);
 
     try {
-      const executeFn = executeQuery as unknown as (input: { data: { question: string } }) => Promise<any>;
-      const data = await executeFn({ data: { question: query } });
+      // Lazy load RPCs and DB Client to prevent SSR Vercel compilation crashes
+      const { generateSQLRpc, generateAnswerRpc } = await import('../server/query');
+      const { queryClientRows } = await import('../lib/client-db');
+
+      const sqlFn = generateSQLRpc as unknown as (input: { data: { question: string } }) => Promise<any>;
+      const sqlData = await sqlFn({ data: { question: query } });
+      const sql = sqlData.sql;
+
+      let finalAnswer = "";
+      let records: any[] = [];
+      let llmInteractions = [sqlData.llmInteraction];
+      let highlightIds: string[] = [];
+
+      if (sql === 'GUARDRAIL_REJECT') {
+        finalAnswer = "This system is designed to answer questions related to the provided dataset only.";
+      } else {
+        let executionError = null;
+        try {
+          records = await queryClientRows(sql);
+        } catch (err: any) {
+          executionError = err.message;
+        }
+
+        const queryContext = executionError ? [{ error: `SQL Execution Failed: ${executionError}` }] : records;
+
+        // Local greedy node ID extractor to govern UI canvas bounds
+        function extractIdsGreedily(recs: any[]): string[] {
+          const ids = new Set<string>();
+          function traverse(obj: any) {
+            if (obj === null || obj === undefined) return;
+            if (typeof obj === 'string' || typeof obj === 'number') ids.add(String(obj));
+            else if (Array.isArray(obj)) obj.forEach(traverse);
+            else if (typeof obj === 'object') Object.values(obj).forEach(traverse);
+          }
+          traverse(recs);
+          return Array.from(ids);
+        }
+
+        highlightIds = extractIdsGreedily(records);
+
+        const ansFn = generateAnswerRpc as unknown as (input: { data: { question: string, records: any[] } }) => Promise<any>;
+        const ansData = await ansFn({ data: { question: query, records: queryContext } });
+
+        finalAnswer = ansData.answer;
+        llmInteractions.push(ansData.llmInteraction);
+      }
 
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: data.answer,
-        sql: data.rawSql,
-        records: data.records,
-        llmInteractions: data.llmInteractions
+        content: finalAnswer,
+        sql: sql !== 'GUARDRAIL_REJECT' ? sql : null,
+        records: records,
+        llmInteractions: llmInteractions
       }]);
 
-      if (data.highlightIds) {
-        onHighlight(data.highlightIds);
+      if (highlightIds.length > 0) {
+        onHighlight(highlightIds);
       }
 
     } catch (err: any) {

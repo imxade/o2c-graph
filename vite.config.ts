@@ -13,7 +13,7 @@ const config = defineConfig({
     devtools(),
     nitro({
       rollupConfig: {
-        external: [/^@sentry/, '@duckdb/node-api', '@duckdb/node-bindings']
+        external: [/^@sentry/, '@duckdb/duckdb-wasm']
       }
     }),
     tsconfigPaths({ projects: ['./tsconfig.json'] }),
@@ -22,7 +22,7 @@ const config = defineConfig({
     viteReact(),
   ],
   ssr: {
-    external: ['@duckdb/node-api', '@duckdb/node-bindings', 'module']
+    external: ['@duckdb/duckdb-wasm', 'module']
   }
 })
 

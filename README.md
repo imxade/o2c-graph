@@ -18,7 +18,7 @@
 - 💬 **Natural Language Chat Interface** – ask questions in plain English; system generates SQL, executes it, returns a grounded answer
 - 🔎 **Node Highlighting** – query results highlight the relevant nodes in the graph (via greedy ID extraction)
 - 🛡️ **Domain Guardrails** – off-topic prompts are rejected before reaching the LLM
-- 🗄️ **Plain DuckDB** – zero-config, in-process engine reads JSONL natively via `read_json_auto()`
+- 🗄️ **DuckDB WASM** – zero-config, in-process engine reads JSONL natively via `read_json_auto()` — pure WebAssembly, no native binaries, works on Vercel
 - ⚡ **Performant Canvas** – limits nodes rendered and utilizes ResizeObservers to maintain robust layout
 - 🐞 **LLM Interaction Debugger** – expandable UI block to inspect sanitized AI prompts and raw JSON responses securely
 
@@ -31,7 +31,7 @@
 | Layer | Technology |
 |---|---|
 | Framework | [TanStack Start](https://tanstack.com/start) (React SSR + Server RPC Functions) |
-| Database | [DuckDB](https://duckdb.org/) via `@duckdb/node-api` |
+| Database | [DuckDB](https://duckdb.org/) via `@duckdb/duckdb-wasm` (pure WASM — works on Vercel) |
 | Graph Visualization | [react-force-graph-2d](https://github.com/vasturiano/react-force-graph) |
 | Styling | Tailwind CSS v4 |
 | LLM | Google Gemini (`gemini-3-flash-preview`) via `@google/genai` |
@@ -81,7 +81,11 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Data
 
-The `sap-o2c-data/` directory must exist in the project root. DuckDB reads all JSONL files on the first incoming request via `read_json_auto()` — no manual ETL required.
+The `sap-o2c-data/` directory must exist in the project root. On startup, all JSONL files are read via Node.js `fs` and registered into DuckDB WASM's virtual filesystem — no manual ETL required.
+
+### Vercel Deployment
+
+TanStack Start handles Vercel deployment natively leveraging the Nitro build preset. The purely client-side DuckDB engine guarantees zero edge-function bundle size violations. Nothing else is required!
 
 ---
 
@@ -103,26 +107,23 @@ The `sap-o2c-data/` directory must exist in the project root. DuckDB reads all J
 ```mermaid
 sequenceDiagram
     participant U as User Browser
-    participant FE as React Frontend
+    participant FE as React Frontend (WASM Engine)
+    participant DB as Local DuckDB (in-browser)
     participant S as TanStack Server (RPC)
-    participant DB as DuckDB (in-process)
     participant LLM as Google Gemini API
 
-    FE->>S: getGraphData()
-    S->>DB: UNION ALL node + link queries
-    DB-->>S: {nodes[], links[]}
-    S-->>FE: Render force graph
-
     U->>FE: Types natural language question
-    FE->>S: executeQuery({ question })
-    S->>LLM: [Prompt 1] schema + question → SQL or GUARDRAIL_REJECT
-    LLM-->>S: SQL code block (or GUARDRAIL_REJECT)
-    S->>DB: Execute SQL
-    DB-->>S: Raw records (JSON sanitized)
-    S->>LLM: [Prompt 2] question + records → plain English
+    FE->>S: generateSQLRpc({ question })
+    S->>LLM: [Prompt 1] schema + question → SQL
+    LLM-->>S: SQL code block
+    S-->>FE: Return SQL string
+    FE->>DB: Execute SQL natively via WASM
+    DB-->>FE: Raw JSON Records
+    FE->>S: generateAnswerRpc({ records })
+    S->>LLM: [Prompt 2] records → plain English
     LLM-->>S: Natural language answer
-    S-->>FE: {answer, rawSql, records, highlightIds, llmInteractions}
-    FE->>FE: Display answer + highlight graph nodes + render debug logs
+    S-->>FE: Return Answer
+    FE->>FE: Display answer + highlight graph nodes
 ```
 
 ### Component Architecture
@@ -220,7 +221,7 @@ Prompt 1 instructs the LLM:
 Since the LLM generates arbitrary SQL (e.g., `GROUP BY material`, `COUNT(*)`), the backend extracts `highlightIds` via a **greedy heuristic**: it recursively extracts all primitive values from the SQL JSON results and sends them to the frontend.
 
 ### 2. Payload Serialization
-Native DuckDB 64-bit bounds trigger `BigInt` casts during JavaScript transformation, and SDK APIs return heavily customized objects. The Data Layer pipeline enforces a recursive JSON stringification sweep prior to returning data to prevent crashes over the TanStack boundary.
+`@duckdb/duckdb-wasm` returns Apache Arrow Tables. These are converted to plain JS objects via `.toArray()` + field enumeration. A recursive sanitization pass then coerces `BigInt` → `Number`, `Date` → ISO string, and strips any non-serializable types before the data crosses the TanStack server-function boundary.
 
 ### 3. Graph Canvas Performance
 Rendering thousands of nodes will crash `react-force-graph-2d`. To guarantee performance, `getGraphData` applies explicit `LIMIT`s in the `UNION ALL` statement for each entity type (e.g., `LIMIT 100` for Sales Orders). This caps the total initial node count below ~1500, ensuring smooth 60fps physics simulation without data overload. Furthermore, ResizeObservers aggressively govern the viewport canvas to deter browser blowout.
