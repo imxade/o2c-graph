@@ -1,10 +1,12 @@
 # O2C Graph Query System
 
-> ⚠️ **Disclaimer:** This project was vibe coded with Gemini 3.1 within hours.
-> 💡 **Prompts:** Check `Gemini3.1.md` for the prompts used during the vibe coding process.
-> 💳 **Live Demo Notice:** If the deployed chatbot is unresponsive or throwing errors, it is highly likely the free-tier Gemini API rate limits have been exhausted. Try again later or clone the repo and supply your own `GEMINI_API_KEY`.
+A context-graph system over SAP Order-to-Cash (O2C) data. Unifies fragmented business entities (Sales Orders, Deliveries, Invoices, Payments, Customers, Products) into an interactive graph with a natural-language query interface.
+
+> **Disclaimer:** This project was vibe coded with Gemini 3.1 within hours.
 > 
-> A context-graph system over SAP Order-to-Cash (O2C) data. Unifies fragmented business entities (Sales Orders, Deliveries, Invoices, Payments, Customers, Products) into an interactive graph with a natural-language query interface.
+> **Prompts:** Check `Gemini3.1.md` for the prompts used during the vibe coding process.
+> 
+> **Live Demo Notice:** If the deployed chatbot is unresponsive or throwing errors, it is highly likely the free-tier Gemini API rate limits have been exhausted. Try again later or clone the repo and supply your own `GEMINI_API_KEY`.
 
 ![O2C Graph Showcase](./image.png)
 
