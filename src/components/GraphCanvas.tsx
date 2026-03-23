@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { queryClientRows } from '../lib/client-db';
 
 export default function GraphCanvas({ highlightIds }: { highlightIds: Set<string> | null }) {
     const [ForceGraph2D, setForceGraph2D] = useState<any>(null);
@@ -25,6 +24,7 @@ export default function GraphCanvas({ highlightIds }: { highlightIds: Set<string
 
     useEffect(() => {
         async function loadGraphData() {
+            const { queryClientRows } = await import('../lib/client-db');
             const [
                 so, soi, odh, odi, bdh, bdi, je, pay, bp, prd, plt
             ] = await Promise.all([
