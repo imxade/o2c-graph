@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
+import { queryClientRows } from '../lib/client-db';
 
-export default function GraphCanvas({ graphData, highlightIds }: { graphData: { nodes: any[], links: any[] } | null, highlightIds: Set<string> | null }) {
+export default function GraphCanvas({ highlightIds }: { highlightIds: Set<string> | null }) {
     const [ForceGraph2D, setForceGraph2D] = useState<any>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] } | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -21,6 +23,56 @@ export default function GraphCanvas({ graphData, highlightIds }: { graphData: { 
         return () => observer.disconnect();
     }, []);
 
+    useEffect(() => {
+        async function loadGraphData() {
+            const [
+                so, soi, odh, odi, bdh, bdi, je, pay, bp, prd, plt
+            ] = await Promise.all([
+                queryClientRows("SELECT DISTINCT salesOrder as id, 'sales_order' as label FROM sales_order_headers LIMIT 100"),
+                queryClientRows("SELECT DISTINCT salesOrder || '_' || salesOrderItem as id, 'sales_order_item' as label, salesOrder, material FROM sales_order_items LIMIT 200"),
+                queryClientRows("SELECT DISTINCT deliveryDocument as id, 'delivery' as label FROM outbound_delivery_headers LIMIT 100"),
+                queryClientRows("SELECT DISTINCT deliveryDocument || '_' || deliveryDocumentItem as id, 'delivery_item' as label, deliveryDocument, referenceSdDocument, plant FROM outbound_delivery_items LIMIT 200"),
+                queryClientRows("SELECT DISTINCT billingDocument as id, 'billing' as label FROM billing_document_headers LIMIT 100"),
+                queryClientRows("SELECT DISTINCT billingDocument || '_' || billingDocumentItem as id, 'billing_item' as label, billingDocument, referenceSdDocument FROM billing_document_items LIMIT 200"),
+                queryClientRows("SELECT DISTINCT accountingDocument as id, 'journal_entry' as label, referenceDocument FROM journal_entry_items_accounts_receivable LIMIT 100"),
+                queryClientRows("SELECT DISTINCT accountingDocument as id, 'payment' as label, clearingAccountingDocument FROM payments_accounts_receivable LIMIT 100"),
+                queryClientRows("SELECT DISTINCT businessPartner as id, 'business_partner' as label FROM business_partners LIMIT 50"),
+                queryClientRows("SELECT DISTINCT product as id, 'product' as label FROM products LIMIT 50"),
+                queryClientRows("SELECT DISTINCT plant as id, 'plant' as label FROM plants LIMIT 20")
+            ]);
+
+            const allNodes = [...so, ...soi, ...odh, ...odi, ...bdh, ...bdi, ...je, ...pay, ...bp, ...prd, ...plt];
+            const seen = new Set<string>();
+            const nodes = allNodes.filter(n => seen.has(n.id) ? false : (seen.add(n.id), true));
+            const nodeIds = seen;
+            const links: { source: string; target: string; label: string }[] = [];
+            const addLink = (source: string, target: string, label: string) => { if (nodeIds.has(source) && nodeIds.has(target)) links.push({ source, target, label }); };
+
+            soi.forEach((item: any) => {
+                addLink(item.salesOrder, item.id, 'has_item');
+                if (item.material) addLink(item.id, item.material, 'material');
+            });
+            odi.forEach((item: any) => {
+                addLink(item.deliveryDocument, item.id, 'has_item');
+                if (item.referenceSdDocument) addLink(item.id, item.referenceSdDocument, 'referenceSdDocument');
+                if (item.plant) addLink(item.id, item.plant, 'plant');
+            });
+            bdi.forEach((item: any) => {
+                addLink(item.billingDocument, item.id, 'has_item');
+                if (item.referenceSdDocument) addLink(item.id, item.referenceSdDocument, 'referenceSdDocument');
+            });
+            je.forEach((item: any) => {
+                if (item.referenceDocument) addLink(item.id, item.referenceDocument, 'referenceDocument');
+            });
+            pay.forEach((item: any) => {
+                if (item.clearingAccountingDocument) addLink(item.id, item.clearingAccountingDocument, 'clearingDoc');
+            });
+
+            setGraphData({ nodes, links });
+        }
+        loadGraphData().catch(err => console.error('Failed to load local DB graph:', err));
+    }, []);
+
     const NODE_R = 4;
     const highlightNodes = highlightIds || new Set<string>();
     const isHighlighting = highlightNodes.size > 0;
@@ -28,7 +80,10 @@ export default function GraphCanvas({ graphData, highlightIds }: { graphData: { 
     return (
         <div ref={containerRef} className="w-full h-full bg-gray-950 overflow-hidden relative">
             {(!ForceGraph2D || !graphData) ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400">Loading graph...</div>
+                <div className="absolute inset-0 flex flex-col gap-2 items-center justify-center bg-gray-900 text-gray-400">
+                    <span className="text-sm font-mono animate-pulse text-blue-400">Initializing Local DuckDB WASM Engine...</span>
+                    <span>Loading semantic context nodes...</span>
+                </div>
             ) : dimensions.width > 0 && (
                 <ForceGraph2D
                     width={dimensions.width}
@@ -71,8 +126,8 @@ export default function GraphCanvas({ graphData, highlightIds }: { graphData: { 
                         }
                         return 1;
                     }}
-                    d3VelocityDecay={0.3} // Improve physics performance on many nodes
-                    cooldownTicks={100} // Stop simulating fast to save CPU
+                    d3VelocityDecay={0.3}
+                    cooldownTicks={100}
                 />
             )}
         </div>

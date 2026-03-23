@@ -108,26 +108,23 @@ The `vercel.json` at the project root tells Vercel to include `sap-o2c-data/**` 
 ```mermaid
 sequenceDiagram
     participant U as User Browser
-    participant FE as React Frontend
+    participant FE as React Frontend (WASM Engine)
+    participant DB as Local DuckDB (in-browser)
     participant S as TanStack Server (RPC)
-    participant DB as DuckDB (in-process)
     participant LLM as Google Gemini API
 
-    FE->>S: getGraphData()
-    S->>DB: UNION ALL node + link queries
-    DB-->>S: {nodes[], links[]}
-    S-->>FE: Render force graph
-
     U->>FE: Types natural language question
-    FE->>S: executeQuery({ question })
-    S->>LLM: [Prompt 1] schema + question → SQL or GUARDRAIL_REJECT
-    LLM-->>S: SQL code block (or GUARDRAIL_REJECT)
-    S->>DB: Execute SQL
-    DB-->>S: Raw records (JSON sanitized)
-    S->>LLM: [Prompt 2] question + records → plain English
+    FE->>S: generateSQLRpc({ question })
+    S->>LLM: [Prompt 1] schema + question → SQL
+    LLM-->>S: SQL code block
+    S-->>FE: Return SQL string
+    FE->>DB: Execute SQL natively via WASM
+    DB-->>FE: Raw JSON Records
+    FE->>S: generateAnswerRpc({ records })
+    S->>LLM: [Prompt 2] records → plain English
     LLM-->>S: Natural language answer
-    S-->>FE: {answer, rawSql, records, highlightIds, llmInteractions}
-    FE->>FE: Display answer + highlight graph nodes + render debug logs
+    S-->>FE: Return Answer
+    FE->>FE: Display answer + highlight graph nodes
 ```
 
 ### Component Architecture

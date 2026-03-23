@@ -1,33 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import GraphCanvas from '../components/GraphCanvas'
 import ChatPanel from '../components/ChatPanel'
-import { getGraphData } from '../server/graph'
 
 export const Route = createFileRoute('/')({
   component: App
 })
 
 function App() {
-  const [graphData, setGraphData] = useState<{ nodes: any[], links: any[] } | null>(null);
-  const [highlightIds, setHighlightIds] = useState<Set<string>>(new Set());
-
-  // Fetch graph data on mount
-  useEffect(() => {
-    getGraphData()
-      .then(data => setGraphData(data))
-      .catch(err => console.error('Failed to load graph:', err));
-  }, []);
+  const [highlightIds, setHighlightIds] = useState<Set<string> | null>(null);
 
   return (
     <main className="w-screen h-screen flex overflow-hidden">
       {/* Left Pane: Graph Viewer */}
-      <div className="flex-1 relative bg-gray-950 h-full">
+      <div className="flex-1 relative bg-gray-950 h-full min-w-0">
         <GraphCanvas
-          graphData={graphData}
           highlightIds={highlightIds}
         />
-
         {/* Floating Header */}
         <div className="absolute top-4 left-4 z-10 pointer-events-none">
           <h1 className="text-2xl font-bold text-white tracking-tight drop-shadow-md">
@@ -44,5 +33,5 @@ function App() {
         <ChatPanel onHighlight={(ids) => setHighlightIds(new Set(ids))} />
       </div>
     </main>
-  );
+  )
 }
