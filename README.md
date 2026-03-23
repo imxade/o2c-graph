@@ -56,7 +56,6 @@ o2c-graph/
 │       ├── GraphCanvas.tsx # ForceGraph2D implementation
 │       └── ChatPanel.tsx   # Chat UI and LLM Debug Logs
 ├── vite.config.ts
-├── vercel.json             # includeFiles: sap-o2c-data/** for Vercel deployments
 ├── package.json
 └── README.md               
 ```
@@ -86,7 +85,7 @@ The `sap-o2c-data/` directory must exist in the project root. On startup, all JS
 
 ### Vercel Deployment
 
-The `vercel.json` at the project root tells Vercel to include `sap-o2c-data/**` inside the serverless function bundle. Commit both `vercel.json` and `sap-o2c-data/` to your repository — they are required at runtime.
+TanStack Start handles Vercel deployment natively leveraging the Nitro build preset. The purely client-side DuckDB engine guarantees zero edge-function bundle size violations. Nothing else is required!
 
 ---
 
